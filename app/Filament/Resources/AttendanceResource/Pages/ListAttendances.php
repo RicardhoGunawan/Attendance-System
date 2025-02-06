@@ -13,6 +13,12 @@ class ListAttendances extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            
+            Actions\Action::make('Tambah Presensi')
+                ->url('/attendance') // URL tujuan
+                ->color('success') // Warna tombol (opsional)
+                ->icon('heroicon-o-calendar'), // Ikon tombol (opsional)
+            
             Actions\CreateAction::make(),
         ];
     }

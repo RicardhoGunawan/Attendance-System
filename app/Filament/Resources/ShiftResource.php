@@ -17,7 +17,7 @@ class ShiftResource extends Resource
 {
     protected static ?string $model = Shift::class;
     protected static ?string $navigationIcon = 'heroicon-o-clock';
-    protected static ?string $navigationGroup = 'Management';
+    protected static ?string $navigationGroup = 'Office Management';
 
     public static function form(Forms\Form $form): Forms\Form
     {
