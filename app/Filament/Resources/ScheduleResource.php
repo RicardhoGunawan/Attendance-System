@@ -7,6 +7,8 @@ use App\Filament\Resources\ScheduleResource\RelationManagers;
 use App\Models\Schedule;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\DatePicker;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -16,69 +18,42 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 class ScheduleResource extends Resource
 {
     protected static ?string $model = Schedule::class;
+
     protected static ?string $navigationIcon = 'heroicon-o-calendar';
     protected static ?string $navigationGroup = 'Office Management';
+
 
     public static function form(Forms\Form $form): Forms\Form
     {
         return $form
             ->schema([
-                Forms\Components\Card::make()
-                    ->schema([
-                        Forms\Components\TextInput::make('name')
-                            ->required()
-                            ->maxLength(255),
-                        Forms\Components\CheckboxList::make('working_days')
-                            ->required()
-                            ->options([
-                                'monday' => 'Monday',
-                                'tuesday' => 'Tuesday',
-                                'wednesday' => 'Wednesday',
-                                'thursday' => 'Thursday',
-                                'friday' => 'Friday',
-                                'saturday' => 'Saturday',
-                                'sunday' => 'Sunday',
-                            ])
-                            ->columns(2),
-                        Forms\Components\TimePicker::make('start_time')
-                            ->required(),
-                        Forms\Components\TimePicker::make('end_time')
-                            ->required(),
-                    ])
+                Select::make('user_id')
+                    ->label('Pegawai')
+                    ->relationship('user', 'name')
+                    ->required(),
+
+                Select::make('shift_id')
+                    ->label('Shift')
+                    ->relationship('shift', 'name')
+                    ->required(),
+
+                Select::make('office_id')
+                    ->label('Office')
+                    ->relationship('office', 'name')
+                    ->required(),
             ]);
     }
 
-    public static function table(Tables\Table $table): Tables\Table
+    public static function table(Table $table): Table
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('name')
-                    ->searchable()
-                    ->sortable(),
-                Tables\Columns\TextColumn::make('working_days')
-                    ->formatStateUsing(fn ($state) => collect($state)->join(', ')),
-                Tables\Columns\TextColumn::make('start_time')
-                    ->time()
-                    ->sortable(),
-                Tables\Columns\TextColumn::make('end_time')
-                    ->time()
-                    ->sortable(),
-                Tables\Columns\TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('user.name')->label('Pegawai')->sortable(),
+                Tables\Columns\TextColumn::make('shift.name')->label('Shift')->sortable(),
+                Tables\Columns\TextColumn::make('office.name')->label('Office')->sortable(),
             ])
             ->filters([
-                //
-            ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
-            ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
+                // Add custom filters if necessary
             ]);
     }
 

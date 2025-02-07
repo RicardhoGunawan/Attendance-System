@@ -3,17 +3,28 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Schedule extends Model
 {
     protected $fillable = [
-        'name',
-        'working_days',
-        'start_time',
-        'end_time',
+        'user_id',
+        'shift_id',
+        'office_id',
     ];
 
-    protected $casts = [
-        'working_days' => 'array',
-    ];
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function shift(): BelongsTo
+    {
+        return $this->belongsTo(Shift::class);
+    }
+
+    public function office(): BelongsTo
+    {
+        return $this->belongsTo(Office::class);
+    }
 }

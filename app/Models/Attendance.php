@@ -9,6 +9,7 @@ class Attendance extends Model
 {
     protected $fillable = [
         'user_id',
+        'shift_id',
         'date',
         'check_in',
         'check_out',
@@ -19,6 +20,10 @@ class Attendance extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+    public function shift(): BelongsTo
+    {
+        return $this->belongsTo(Shift::class);
     }
 }
 
