@@ -3,21 +3,56 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\AttendanceResource\Pages;
-use App\Filament\Resources\AttendanceResource\RelationManagers;
 use App\Models\Attendance;
 use Filament\Forms;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
-use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class AttendanceResource extends Resource
 {
     protected static ?string $model = Attendance::class;
     protected static ?string $navigationIcon = 'heroicon-o-finger-print';
     protected static ?string $navigationGroup = 'Attendance Management';
+
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+
+        // Membatasi akses hanya untuk attendance milik employee yang sedang login
+        if (auth()->user()->hasRole('employee')) {
+            return $query->where('user_id', auth()->id());
+        }
+
+        return $query;
+    }
+
+    // Membatasi actions untuk employee
+    protected function getTableActions(): array
+    {
+        if (auth()->user()->hasRole('employee')) {
+            // Employee tidak bisa edit atau hapus data
+            return [];
+        }
+
+        return [
+            Tables\Actions\EditAction::make(),
+            Tables\Actions\DeleteAction::make(),
+        ];
+    }
+
+    // Membatasi bulk actions untuk employee
+    protected function getTableBulkActions(): array
+    {
+        if (auth()->user()->hasRole('employee')) {
+            // Employee tidak bisa melakukan bulk action
+            return [];
+        }
+
+        return [
+            Tables\Actions\DeleteBulkAction::make(),
+        ];
+    }
 
     public static function form(Forms\Form $form): Forms\Form
     {

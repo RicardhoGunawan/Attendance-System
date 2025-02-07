@@ -16,8 +16,22 @@ class LeaveRequest extends Model
         'admin_notes',
     ];
 
+    // Relasi user
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    // Set user_id otomatis
+    public static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($leaveRequest) {
+            // Jika user sedang login, user_id otomatis diatur
+            if (auth()->check()) {
+                $leaveRequest->user_id = auth()->id(); // Menetapkan user_id yang sedang login
+            }
+        });
     }
 }

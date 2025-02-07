@@ -3,21 +3,59 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\LeaveRequestResource\Pages;
-use App\Filament\Resources\LeaveRequestResource\RelationManagers;
 use App\Models\LeaveRequest;
 use Filament\Forms;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Filament\Tables\Actions\Action;
+use Filament\Forms\Components\TextInput;
+use Filament\Tables\Actions\EditAction;
+use Filament\Tables\Actions\DeleteAction;
+use Filament\Tables\Actions\DeleteBulkAction;
+use Filament\Tables\Actions\BulkActionGroup;
 
 class LeaveRequestResource extends Resource
 {
     protected static ?string $model = LeaveRequest::class;
     protected static ?string $navigationIcon = 'heroicon-o-calendar-days';
     protected static ?string $navigationGroup = 'Attendance Management';
+
+    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        $query = parent::getEloquentQuery();
+
+        if (auth()->user()->hasRole('employee')) {
+            return $query->where('user_id', auth()->id());
+        }
+
+        return $query;
+    }
+
+    // Membatasi akses ke leave request hanya untuk user yang relevan
+    protected function getTableActions(): array
+    {
+        if (auth()->user()->hasRole('employee')) {
+            return [];
+        }
+
+        return [
+            EditAction::make(),
+            DeleteAction::make(),
+        ];
+    }
+
+    // Membatasi bulk actions untuk employee
+    protected function getTableBulkActions(): array
+    {
+        if (auth()->user()->hasRole('employee')) {
+            return [];
+        }
+
+        return [
+            DeleteBulkAction::make(),
+        ];
+    }
 
     public static function form(Forms\Form $form): Forms\Form
     {
@@ -28,7 +66,10 @@ class LeaveRequestResource extends Resource
                         Forms\Components\Select::make('user_id')
                             ->relationship('user', 'name')
                             ->required()
-                            ->searchable(),
+                            ->searchable()
+                            ->default(fn() => auth()->user()->hasRole('employee') ? auth()->id() : null)
+                            ->disabled(fn() => auth()->user()->hasRole('employee')),
+
                         Forms\Components\DatePicker::make('start_date')
                             ->required(),
                         Forms\Components\DatePicker::make('end_date')
@@ -37,17 +78,25 @@ class LeaveRequestResource extends Resource
                             ->required()
                             ->maxLength(65535)
                             ->rows(3),
+
+                        Forms\Components\Hidden::make('status')
+                            ->default('pending'),
+
                         Forms\Components\Select::make('status')
-                            ->required()
+                            ->label('Status')
                             ->options([
                                 'pending' => 'Pending',
                                 'approved' => 'Approved',
                                 'rejected' => 'Rejected',
-                            ]),
+                            ])
+                            ->required()
+                            ->visible(fn() => auth()->user()->hasRole('admin')),
+
                         Forms\Components\Textarea::make('admin_notes')
                             ->maxLength(65535)
                             ->nullable()
-                            ->rows(3),
+                            ->rows(3)
+                            ->visible(fn() => auth()->user()->hasRole('admin') && !auth()->user()->hasRole('employee')),
                     ])
             ]);
     }
@@ -89,26 +138,35 @@ class LeaveRequestResource extends Resource
                     ->relationship('user', 'name'),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
-                Tables\Actions\Action::make('approve')
+                // Menambahkan action approve untuk admin
+                Action::make('approve')
+                    ->label('Approve')
+                    ->icon('heroicon-o-check-circle')
                     ->action(function (LeaveRequest $record) {
-                        $record->update(['status' => 'approved']);
+                        // Menampilkan modal untuk memasukkan admin notes
+                        $record->status = 'approved';
+                        $record->save();
                     })
-                    ->requiresConfirmation()
-                    ->visible(fn (LeaveRequest $record) => $record->status === 'pending')
-                    ->color('success'),
-                Tables\Actions\Action::make('reject')
+                    ->color('success')
+                    ->visible(fn($record) => auth()->user()->hasRole('admin') && $record->status === 'pending'),
+
+                // Menambahkan action reject untuk admin
+                Action::make('reject')
+                    ->label('Reject')
+                    ->icon('heroicon-o-x-circle')
                     ->action(function (LeaveRequest $record) {
-                        $record->update(['status' => 'rejected']);
+                        // Menampilkan modal untuk memasukkan admin notes
+                        $record->status = 'rejected';
+                        $record->save();
                     })
-                    ->requiresConfirmation()
-                    ->visible(fn (LeaveRequest $record) => $record->status === 'pending')
-                    ->color('danger'),
+                    ->color('danger')
+                    ->visible(fn($record) => auth()->user()->hasRole('admin') && $record->status === 'pending'),
+
+                DeleteAction::make(),
             ])
             ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }
