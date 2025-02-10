@@ -11,5 +11,14 @@ class Office extends Model
         'address',
         'phone',
         'email',
+        'latitude',
+        'longitude',
+        'radius',
+    ];
+
+    protected $casts = [
+        'latitude' => 'decimal:8',
+        'longitude' => 'decimal:8',
+        'radius' => 'integer',
     ];
 }
