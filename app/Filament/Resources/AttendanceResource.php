@@ -19,7 +19,6 @@ class AttendanceResource extends Resource
     {
         $query = parent::getEloquentQuery();
 
-        // Membatasi akses hanya untuk attendance milik employee yang sedang login
         if (auth()->user()->hasRole('employee')) {
             return $query->where('user_id', auth()->id());
         }
@@ -27,62 +26,68 @@ class AttendanceResource extends Resource
         return $query;
     }
 
-    // Membatasi actions untuk employee
-    protected function getTableActions(): array
-    {
-        if (auth()->user()->hasRole('employee')) {
-            // Employee tidak bisa edit atau hapus data
-            return [];
-        }
-
-        return [
-            Tables\Actions\EditAction::make(),
-            Tables\Actions\DeleteAction::make(),
-        ];
-    }
-
-    // Membatasi bulk actions untuk employee
-    protected function getTableBulkActions(): array
-    {
-        if (auth()->user()->hasRole('employee')) {
-            // Employee tidak bisa melakukan bulk action
-            return [];
-        }
-
-        return [
-            Tables\Actions\DeleteBulkAction::make(),
-        ];
-    }
-
     public static function form(Forms\Form $form): Forms\Form
     {
-        return $form
-            ->schema([
-                Forms\Components\Card::make()
-                    ->schema([
-                        Forms\Components\Select::make('user_id')
-                            ->relationship('user', 'name')
-                            ->required()
-                            ->searchable(),
-                        Forms\Components\DatePicker::make('date')
-                            ->required(),
-                        Forms\Components\TimePicker::make('check_in')
-                            ->nullable(),
-                        Forms\Components\TimePicker::make('check_out')
-                            ->nullable(),
-                        Forms\Components\Select::make('status')
-                            ->required()
-                            ->options([
-                                'present' => 'Present',
-                                'late' => 'Late',
-                                'absent' => 'Absent',
-                            ]),
-                        Forms\Components\Textarea::make('notes')
-                            ->maxLength(65535)
-                            ->nullable()
-                            ->rows(3),
+        return $form->schema([
+            Forms\Components\Card::make()->schema([
+                Forms\Components\Select::make('user_id')
+                    ->relationship('user', 'name')
+                    ->required()
+                    ->searchable()
+                    ->visible(fn () => auth()->user()->hasRole('admin')),
+
+                Forms\Components\Select::make('office_id')
+                    ->relationship('office', 'name')
+                    ->required()
+                    ->searchable(),
+
+                Forms\Components\DatePicker::make('date')
+                    ->required()
+                    ->default(now()),
+
+                Forms\Components\TimePicker::make('check_in')
+                    ->nullable(),
+
+                Forms\Components\TimePicker::make('check_out')
+                    ->nullable(),
+
+                Forms\Components\Grid::make(2)->schema([
+                    Forms\Components\TextInput::make('check_in_latitude')
+                        ->label('Check In Latitude')
+                        ->numeric()
+                        ->nullable(),
+
+                    Forms\Components\TextInput::make('check_in_longitude')
+                        ->label('Check In Longitude')
+                        ->numeric()
+                        ->nullable(),
+
+                    Forms\Components\TextInput::make('check_out_latitude')
+                        ->label('Check Out Latitude')
+                        ->numeric()
+                        ->nullable(),
+
+                    Forms\Components\TextInput::make('check_out_longitude')
+                        ->label('Check Out Longitude')
+                        ->numeric()
+                        ->nullable(),
+                ]),
+
+                Forms\Components\Select::make('status')
+                    ->required()
+                    ->options([
+                        'present' => 'Present',
+                        'late' => 'Late',
+                        'absent' => 'Absent',
                     ])
-            ]);
+                    ->default('present'),
+
+                Forms\Components\Textarea::make('notes')
+                    ->maxLength(65535)
+                    ->nullable()
+                    ->rows(3),
+            ])->columns(1)
+        ]);
     }
 
     public static function table(Tables\Table $table): Tables\Table
@@ -91,26 +96,31 @@ class AttendanceResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('user.name')
                     ->searchable()
+                    ->sortable()
+                    ->visible(fn () => auth()->user()->hasRole('admin')),
+
+                Tables\Columns\TextColumn::make('office.name')
+                    ->searchable()
                     ->sortable(),
+
                 Tables\Columns\TextColumn::make('date')
                     ->date()
                     ->sortable(),
+
                 Tables\Columns\TextColumn::make('check_in')
                     ->time()
                     ->sortable(),
+
                 Tables\Columns\TextColumn::make('check_out')
                     ->time()
                     ->sortable(),
+
                 Tables\Columns\BadgeColumn::make('status')
                     ->colors([
                         'success' => 'present',
                         'warning' => 'late',
                         'danger' => 'absent',
                     ]),
-                Tables\Columns\TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('status')
@@ -119,17 +129,22 @@ class AttendanceResource extends Resource
                         'late' => 'Late',
                         'absent' => 'Absent',
                     ]),
+                Tables\Filters\SelectFilter::make('office')
+                    ->relationship('office', 'name'),
                 Tables\Filters\SelectFilter::make('user')
-                    ->relationship('user', 'name'),
+                    ->relationship('user', 'name')
+                    ->visible(fn () => auth()->user()->hasRole('admin')),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Tables\Actions\EditAction::make()
+                    ->visible(fn () => auth()->user()->hasRole('admin')),
+                Tables\Actions\DeleteAction::make()
+                    ->visible(fn () => auth()->user()->hasRole('admin')),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),
-                ]),
+                ])->visible(fn () => auth()->user()->hasRole('admin')),
             ]);
     }
 

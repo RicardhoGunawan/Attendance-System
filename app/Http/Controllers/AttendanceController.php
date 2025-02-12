@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Attendance;
+use App\Models\Office;
+use App\Models\Schedule;
 use App\Models\Shift;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -17,42 +19,57 @@ class AttendanceController extends Controller
     {
         $user = auth()->user();
         $today = Carbon::today();
-        
-        // Get today's attendance with shift information
-        $attendance = Attendance::with('shift')
+
+        // Get user's schedule
+        $schedule = Schedule::where('user_id', $user->id)
+            ->with(['office', 'shift'])
+            ->first();
+
+        if (!$schedule) {
+            return view('attendance.no-schedule'); // Create this view to show "No schedule assigned" message
+        }
+
+        // Get today's attendance
+        $attendance = Attendance::with('office')
             ->where('user_id', $user->id)
             ->whereDate('date', $today)
             ->first();
-        
+
         // Get monthly statistics
         $monthlyStats = $this->getMonthlyStatistics($user->id);
-        
-        // Get attendance history with shift information
-        $history = Attendance::with(['user', 'shift'])
+
+        // Get attendance history
+        $history = Attendance::with(['user', 'office'])
             ->where('user_id', $user->id)
             ->orderBy('date', 'desc')
             ->paginate(10);
 
-        // Get available shifts for the user
-        $shifts = Shift::all();
-
-        return view('attendance.index', compact('attendance', 'history', 'monthlyStats', 'shifts'));
+        return view('attendance.index', compact('attendance', 'history', 'monthlyStats', 'schedule'));
     }
 
     public function checkIn(Request $request)
     {
         try {
             DB::beginTransaction();
-            
+
             $user = auth()->user();
             $now = Carbon::now();
-            
-            // Get user's assigned shift for today
-            $shift = $this->getUserShiftForDate($user->id, $now);
-            
-            if (!$shift) {
-                return redirect()->back()->with('error', 'Tidak ada shift yang ditentukan untuk hari ini');
+
+            // Get user's schedule
+            $schedule = Schedule::where('user_id', $user->id)->first();
+
+            if (!$schedule) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'No schedule assigned'
+                ], 400);
             }
+
+            // Validate location data
+            $request->validate([
+                'latitude' => 'required|numeric',
+                'longitude' => 'required|numeric',
+            ]);
 
             // Check if already checked in today
             $existingAttendance = Attendance::where('user_id', $user->id)
@@ -60,31 +77,60 @@ class AttendanceController extends Controller
                 ->first();
 
             if ($existingAttendance) {
-                return redirect()->back()->with('error', 'Anda sudah melakukan check-in hari ini');
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'You have already checked in today'
+                ], 400);
             }
 
-            $status = $this->determineCheckInStatus($now, $shift);
-            
-            // Create new attendance record
+            // Validate distance from office
+            if (
+                !$this->isWithinOfficeRadius(
+                    $request->latitude,
+                    $request->longitude,
+                    $schedule->office->latitude,
+                    $schedule->office->longitude,
+                    $schedule->office->radius
+                )
+            ) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'You are outside the office radius'
+                ], 400);
+            }
+
+            // Determine check-in status based on shift time
+            $status = $this->determineCheckInStatus($now, $schedule->shift);
+
+            // Create attendance record
             $attendance = Attendance::create([
                 'user_id' => $user->id,
-                'shift_id' => $shift->id,
+                'office_id' => $schedule->office_id,
                 'date' => $now->toDateString(),
                 'check_in' => $now->toTimeString(),
+                'check_in_latitude' => $request->latitude,
+                'check_in_longitude' => $request->longitude,
                 'status' => $status,
-                'notes' => $status === 'late' ? 
-                    "Terlambat " . $this->calculateLateMinutes($now, $shift) . " menit" : null
+                'notes' => $status === 'late' ?
+                    "Late by " . $this->calculateLateMinutes($now, $schedule->shift) . " minutes" : null
             ]);
 
             $this->logAttendanceActivity($attendance, 'check_in');
 
             DB::commit();
-            return redirect()->back()->with('success', 'Check-in berhasil pada ' . $now->format('H:i:s'));
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Check-in successful at ' . $now->format('H:i:s'),
+                'data' => $attendance
+            ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Check-in error: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Terjadi kesalahan saat check-in');
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An error occurred during check-in'
+            ], 500);
         }
     }
 
@@ -92,86 +138,118 @@ class AttendanceController extends Controller
     {
         try {
             DB::beginTransaction();
-            
+
             $user = auth()->user();
             $now = Carbon::now();
-            
-            $attendance = Attendance::with('shift')
+
+            // Validate location data
+            $request->validate([
+                'latitude' => 'required|numeric',
+                'longitude' => 'required|numeric'
+            ]);
+
+            $attendance = Attendance::with('office')
                 ->where('user_id', $user->id)
                 ->whereDate('date', $now->toDateString())
                 ->whereNotNull('check_in')
                 ->whereNull('check_out')
-                ->first();
+                ->firstOrFail();
 
-            if (!$attendance) {
-                return redirect()->back()->with('error', 'Tidak dapat melakukan check-out. Pastikan Anda sudah check-in hari ini');
+            // Validate distance from office
+            if (
+                !$this->isWithinOfficeRadius(
+                    $request->latitude,
+                    $request->longitude,
+                    $attendance->office->latitude,
+                    $attendance->office->longitude,
+                    $attendance->office->radius
+                )
+            ) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'You are outside the office radius'
+                ], 400);
             }
 
             // Calculate work duration
             $checkInTime = Carbon::parse($attendance->check_in);
             $workDuration = $now->diffInMinutes($checkInTime);
-            
-            // Check if checking out before shift end time
-            $isEarlyCheckout = $this->isEarlyCheckout($now, $attendance->shift);
-            $notes = $attendance->notes . "\nDurasi kerja: " . $this->formatWorkDuration($workDuration);
-            
-            if ($isEarlyCheckout) {
-                $notes .= "\nCheck-out lebih awal dari jadwal shift";
-            }
+
+            $notes = $attendance->notes . "\nWork duration: " . $this->formatWorkDuration($workDuration);
 
             // Update attendance record
             $attendance->update([
                 'check_out' => $now->toTimeString(),
+                'check_out_latitude' => $request->latitude,
+                'check_out_longitude' => $request->longitude,
                 'notes' => $notes
             ]);
 
             $this->logAttendanceActivity($attendance, 'check_out');
 
             DB::commit();
-            return redirect()->back()->with('success', 'Check-out berhasil pada ' . $now->format('H:i:s'));
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Check-out successful at ' . $now->format('H:i:s'),
+                'data' => $attendance
+            ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Check-out error: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Terjadi kesalahan saat check-out');
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An error occurred during check-out'
+            ], 500);
         }
     }
 
-    protected function getUserShiftForDate($userId, Carbon $date)
+    protected function isWithinOfficeRadius($userLat, $userLng, $officeLat, $officeLng, $radius)
     {
-        // This method should be implemented based on your shift assignment logic
-        // For example, you might have a user_shifts table or a default shift assignment
-        return Shift::first(); // Placeholder implementation
+        // Convert coordinates to radians
+        $userLat = deg2rad((float) $userLat);
+        $userLng = deg2rad((float) $userLng);
+        $officeLat = deg2rad((float) $officeLat);
+        $officeLng = deg2rad((float) $officeLng);
+
+        // Haversine formula
+        $latDelta = $officeLat - $userLat;
+        $lngDelta = $officeLng - $userLng;
+
+        $a = sin($latDelta / 2) * sin($latDelta / 2) +
+            cos($userLat) * cos($officeLat) *
+            sin($lngDelta / 2) * sin($lngDelta / 2);
+
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+        // Earth's radius in meters
+        $distance = 6371000 * $c;
+
+        return $distance <= (float) $radius;
     }
 
     protected function determineCheckInStatus(Carbon $time, Shift $shift): string
     {
-        $shiftStart = Carbon::parse($shift->start_time);
-        $lateThreshold = $shiftStart->copy()->addMinutes($this->lateThreshold);
-
+        $workStart = Carbon::createFromTimeString($shift->start_time);
+        $lateThreshold = $workStart->copy()->addMinutes($this->lateThreshold);
+    
         if ($time->lt($lateThreshold)) {
             return 'present';
         }
         return 'late';
     }
-
+    
     protected function calculateLateMinutes(Carbon $checkInTime, Shift $shift): int
     {
-        $shiftStart = Carbon::parse($shift->start_time);
-        return max(0, $checkInTime->diffInMinutes($shiftStart));
-    }
-
-    protected function isEarlyCheckout(Carbon $checkOutTime, Shift $shift): bool
-    {
-        $shiftEnd = Carbon::parse($shift->end_time);
-        return $checkOutTime->lt($shiftEnd);
+        $workStart = Carbon::createFromTimeString($shift->start_time);
+        return max(0, $checkInTime->diffInMinutes($workStart));
     }
 
     protected function formatWorkDuration(int $minutes): string
     {
         $hours = floor($minutes / 60);
         $remainingMinutes = $minutes % 60;
-        return sprintf("%d jam %d menit", $hours, $remainingMinutes);
+        return sprintf("%d hours %d minutes", $hours, $remainingMinutes);
     }
 
     protected function getMonthlyStatistics(int $userId): array
@@ -210,62 +288,18 @@ class AttendanceController extends Controller
     {
         Log::info("Attendance {$action}", [
             'user_id' => $attendance->user_id,
-            'shift_id' => $attendance->shift_id,
+            'office_id' => $attendance->office_id,
             'date' => $attendance->date,
             'time' => $action === 'check_in' ? $attendance->check_in : $attendance->check_out,
-            'status' => $attendance->status
+            'status' => $attendance->status,
+            'location' => [
+                'latitude' => $action === 'check_in' ?
+                    $attendance->check_in_latitude :
+                    $attendance->check_out_latitude,
+                'longitude' => $action === 'check_in' ?
+                    $attendance->check_in_longitude :
+                    $attendance->check_out_longitude,
+            ]
         ]);
-    }
-
-    public function report(Request $request)
-    {
-        $user = auth()->user();
-        $startDate = $request->input('start_date', Carbon::now()->startOfMonth());
-        $endDate = $request->input('end_date', Carbon::now()->endOfMonth());
-
-        $attendances = Attendance::with('shift')
-            ->where('user_id', $user->id)
-            ->whereBetween('date', [$startDate, $endDate])
-            ->orderBy('date', 'desc')
-            ->get();
-
-        $statistics = $this->calculateAttendanceStatistics($attendances);
-
-        return view('attendance.report', compact('attendances', 'statistics'));
-    }
-
-    protected function calculateAttendanceStatistics($attendances): array
-    {
-        $totalWorkMinutes = 0;
-        $lateMinutes = 0;
-        $earlyCheckouts = 0;
-
-        foreach ($attendances as $attendance) {
-            if ($attendance->check_in && $attendance->check_out && $attendance->shift) {
-                $checkIn = Carbon::parse($attendance->check_in);
-                $checkOut = Carbon::parse($attendance->check_out);
-                $totalWorkMinutes += $checkIn->diffInMinutes($checkOut);
-
-                // Calculate late minutes based on shift
-                $scheduledStart = Carbon::parse($attendance->shift->start_time);
-                if ($checkIn->gt($scheduledStart)) {
-                    $lateMinutes += $checkIn->diffInMinutes($scheduledStart);
-                }
-
-                // Check for early checkouts based on shift
-                $scheduledEnd = Carbon::parse($attendance->shift->end_time);
-                if ($checkOut->lt($scheduledEnd)) {
-                    $earlyCheckouts++;
-                }
-            }
-        }
-
-        return [
-            'total_work_hours' => round($totalWorkMinutes / 60, 1),
-            'average_work_hours' => $attendances->count() > 0 ? 
-                round($totalWorkMinutes / 60 / $attendances->count(), 1) : 0,
-            'total_late_minutes' => $lateMinutes,
-            'early_checkouts' => $earlyCheckouts
-        ];
     }
 }
