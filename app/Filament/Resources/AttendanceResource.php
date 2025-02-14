@@ -101,7 +101,9 @@ class AttendanceResource extends Resource
 
                 Tables\Columns\TextColumn::make('office.name')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->visible(fn () => auth()->user()->hasRole('admin')),
+
 
                 Tables\Columns\TextColumn::make('date')
                     ->date()
