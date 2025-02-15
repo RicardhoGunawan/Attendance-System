@@ -22,10 +22,10 @@ class ScheduleResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-calendar';
     protected static ?string $navigationGroup = 'Office Management';
 
-    public static function shouldRegisterNavigation(): bool
-    {
-        return auth()->user()->hasRole('admin');
-    }
+    // public static function shouldRegisterNavigation(): bool
+    // {
+    //     return auth()->user()->hasRole('admin');
+    // }
 
 
     public static function form(Forms\Form $form): Forms\Form

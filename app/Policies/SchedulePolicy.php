@@ -3,10 +3,10 @@
 namespace App\Policies;
 
 use App\Models\User;
-use App\Models\LeaveRequest;
+use App\Models\Schedule;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
-class LeaveRequestPolicy
+class SchedulePolicy
 {
     use HandlesAuthorization;
 
@@ -15,15 +15,15 @@ class LeaveRequestPolicy
      */
     public function viewAny(User $user): bool
     {
-        return $user->can('view_any_leave::request');
+        return $user->can('view_any_schedule');
     }
 
     /**
      * Determine whether the user can view the model.
      */
-    public function view(User $user, LeaveRequest $leaveRequest): bool
+    public function view(User $user, Schedule $schedule): bool
     {
-        return $user->can('view_leave::request');
+        return $user->can('view_schedule');
     }
 
     /**
@@ -31,23 +31,23 @@ class LeaveRequestPolicy
      */
     public function create(User $user): bool
     {
-        return $user->can('create_leave::request');
+        return $user->can('create_schedule');
     }
 
     /**
      * Determine whether the user can update the model.
      */
-    public function update(User $user, LeaveRequest $leaveRequest): bool
+    public function update(User $user, Schedule $schedule): bool
     {
-        return $user->can('update_leave::request');
+        return $user->can('update_schedule');
     }
 
     /**
      * Determine whether the user can delete the model.
      */
-    public function delete(User $user, LeaveRequest $leaveRequest): bool
+    public function delete(User $user, Schedule $schedule): bool
     {
-        return $user->can('delete_leave::request');
+        return $user->can('delete_schedule');
     }
 
     /**
@@ -55,15 +55,15 @@ class LeaveRequestPolicy
      */
     public function deleteAny(User $user): bool
     {
-        return $user->can('delete_any_leave::request');
+        return $user->can('delete_any_schedule');
     }
 
     /**
      * Determine whether the user can permanently delete.
      */
-    public function forceDelete(User $user, LeaveRequest $leaveRequest): bool
+    public function forceDelete(User $user, Schedule $schedule): bool
     {
-        return $user->can('force_delete_leave::request');
+        return $user->can('force_delete_schedule');
     }
 
     /**
@@ -71,15 +71,15 @@ class LeaveRequestPolicy
      */
     public function forceDeleteAny(User $user): bool
     {
-        return $user->can('force_delete_any_leave::request');
+        return $user->can('force_delete_any_schedule');
     }
 
     /**
      * Determine whether the user can restore.
      */
-    public function restore(User $user, LeaveRequest $leaveRequest): bool
+    public function restore(User $user, Schedule $schedule): bool
     {
-        return $user->can('restore_leave::request');
+        return $user->can('restore_schedule');
     }
 
     /**
@@ -87,15 +87,15 @@ class LeaveRequestPolicy
      */
     public function restoreAny(User $user): bool
     {
-        return $user->can('restore_any_leave::request');
+        return $user->can('restore_any_schedule');
     }
 
     /**
      * Determine whether the user can replicate.
      */
-    public function replicate(User $user, LeaveRequest $leaveRequest): bool
+    public function replicate(User $user, Schedule $schedule): bool
     {
-        return $user->can('replicate_leave::request');
+        return $user->can('replicate_schedule');
     }
 
     /**
@@ -103,6 +103,6 @@ class LeaveRequestPolicy
      */
     public function reorder(User $user): bool
     {
-        return $user->can('reorder_leave::request');
+        return $user->can('reorder_schedule');
     }
 }
