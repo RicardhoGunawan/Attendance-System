@@ -21,6 +21,7 @@ class UserResource extends Resource
     // }
     protected static ?string $slug = 'users';
 
+
     public static function form(Forms\Form $form): Forms\Form
     {
         return $form
@@ -37,7 +38,7 @@ class UserResource extends Resource
                     ->password()
                     ->minLength(8)
                     ->maxLength(255)
-                    ->dehydrateStateUsing(fn ($state) => bcrypt($state)),
+                    ->dehydrateStateUsing(fn($state) => bcrypt($state)),
                 Forms\Components\Select::make('roles')
                     ->multiple()
                     ->relationship('roles', 'name')
@@ -70,5 +71,9 @@ class UserResource extends Resource
             'create' => Pages\CreateUser::route('/create'),
             'edit' => Pages\EditUser::route('/{record}/edit'),
         ];
+    }
+    public static function getNavigationBadge(): ?string
+    {
+        return static::getModel()::count();
     }
 }

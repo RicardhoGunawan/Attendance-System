@@ -134,6 +134,7 @@ class ScheduleResource extends Resource
                     ->modalHeading('Edit Schedule'),
 
                 Tables\Actions\Action::make('toggleWFA')
+                    ->visible(fn () => auth()->user()->hasRole('admin'))
                     ->label(fn(Schedule $record): string => $record->status ? 'Disable WFA' : 'Enable WFA')
                     ->icon(fn(Schedule $record): string => $record->status ? 'heroicon-o-building-office' : 'heroicon-o-home')
                     ->color(fn(Schedule $record): string => $record->status ? 'danger' : 'success')

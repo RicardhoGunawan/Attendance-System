@@ -21,6 +21,7 @@ class Attendance extends Model
         'status',
         'notes',
         'is_wfa',
+        'overtime',
 
     ];
 

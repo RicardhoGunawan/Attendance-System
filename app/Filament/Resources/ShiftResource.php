@@ -80,4 +80,8 @@ class ShiftResource extends Resource
             'edit' => Pages\EditShift::route('/{record}/edit'),
         ];
     }
+    public static function getNavigationBadge(): ?string
+    {
+        return static::getModel()::count();
+    }
 }

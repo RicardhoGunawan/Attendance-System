@@ -85,13 +85,15 @@ class AttendanceController extends Controller
 
             // Only validate distance if WFA is not active
             if (!$schedule->status) {
-                if (!$this->isWithinOfficeRadius(
-                    $request->latitude,
-                    $request->longitude,
-                    $schedule->office->latitude,
-                    $schedule->office->longitude,
-                    $schedule->office->radius
-                )) {
+                if (
+                    !$this->isWithinOfficeRadius(
+                        $request->latitude,
+                        $request->longitude,
+                        $schedule->office->latitude,
+                        $schedule->office->longitude,
+                        $schedule->office->radius
+                    )
+                ) {
                     return response()->json([
                         'status' => 'error',
                         'message' => 'You are outside the office radius'
@@ -157,13 +159,15 @@ class AttendanceController extends Controller
 
             // Only validate distance if this is not a WFA attendance
             if (!$attendance->is_wfa) {
-                if (!$this->isWithinOfficeRadius(
-                    $request->latitude,
-                    $request->longitude,
-                    $attendance->office->latitude,
-                    $attendance->office->longitude,
-                    $attendance->office->radius
-                )) {
+                if (
+                    !$this->isWithinOfficeRadius(
+                        $request->latitude,
+                        $request->longitude,
+                        $attendance->office->latitude,
+                        $attendance->office->longitude,
+                        $attendance->office->radius
+                    )
+                ) {
                     return response()->json([
                         'status' => 'error',
                         'message' => 'You are outside the office radius'
@@ -175,6 +179,19 @@ class AttendanceController extends Controller
             $checkInTime = Carbon::parse($attendance->check_in);
             $workDuration = $now->diffInMinutes($checkInTime);
 
+            // Ambil shift user dari tabel Schedule
+            $schedule = Schedule::where('user_id', $user->id)->first();
+
+            $overtimeMinutes = 0; // Default overtime = 0
+            if ($schedule) {
+                $shiftEndTime = Carbon::parse($schedule->shift->end_time);
+
+                // Jika checkout lebih dari 1 jam setelah shift berakhir, hitung overtime
+                if ($now->greaterThan($shiftEndTime->copy()->addHour())) {
+                    $overtimeMinutes = $shiftEndTime->diffInMinutes($now) - 60;
+                }
+            }
+
             $notes = $this->generateCheckOutNotes($attendance, $workDuration);
 
             // Update attendance record
@@ -182,6 +199,7 @@ class AttendanceController extends Controller
                 'check_out' => $now->toTimeString(),
                 'check_out_latitude' => $request->latitude,
                 'check_out_longitude' => $request->longitude,
+                'overtime' => $overtimeMinutes, // Tambahkan overtime ke database
                 'notes' => $notes
             ]);
 
@@ -191,6 +209,7 @@ class AttendanceController extends Controller
             return response()->json([
                 'status' => 'success',
                 'message' => 'Check-out successful at ' . $now->format('H:i:s'),
+                'overtime' => $overtimeMinutes . ' menit',
                 'data' => $attendance
             ]);
 
@@ -204,31 +223,32 @@ class AttendanceController extends Controller
         }
     }
 
+
     protected function generateCheckInNotes(string $status, Carbon $now, Schedule $schedule): string
     {
         $notes = [];
-        
+
         if ($status === 'late') {
             $notes[] = "Late by " . $this->calculateLateMinutes($now, $schedule->shift) . " minutes";
         }
-        
+
         if ($schedule->status) {
             $notes[] = "Working From Anywhere (WFA)";
         }
-        
+
         return implode("\n", $notes);
     }
 
     protected function generateCheckOutNotes(Attendance $attendance, int $workDuration): string
     {
         $notes = [];
-        
+
         if ($attendance->notes) {
             $notes[] = $attendance->notes;
         }
-        
+
         $notes[] = "Work duration: " . $this->formatWorkDuration($workDuration);
-        
+
         return implode("\n", $notes);
     }
 
@@ -260,13 +280,13 @@ class AttendanceController extends Controller
     {
         $workStart = Carbon::createFromTimeString($shift->start_time);
         $lateThreshold = $workStart->copy()->addMinutes($this->lateThreshold);
-    
+
         if ($time->lt($lateThreshold)) {
             return 'present';
         }
         return 'late';
     }
-    
+
     protected function calculateLateMinutes(Carbon $checkInTime, Shift $shift): int
     {
         $workStart = Carbon::createFromTimeString($shift->start_time);

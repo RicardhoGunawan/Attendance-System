@@ -2,12 +2,15 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Exports\AttendanceExporter;
 use App\Filament\Resources\AttendanceResource\Pages;
 use App\Models\Attendance;
+use Filament\Tables\Actions\ExportAction;
 use Filament\Forms;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Illuminate\Database\Eloquent\Builder;
+
 
 class AttendanceResource extends Resource
 {
@@ -34,7 +37,7 @@ class AttendanceResource extends Resource
                     ->relationship('user', 'name')
                     ->required()
                     ->searchable()
-                    ->visible(fn () => auth()->user()->hasRole('admin')),
+                    ->visible(fn() => auth()->user()->hasRole('admin')),
 
                 Forms\Components\Select::make('office_id')
                     ->relationship('office', 'name')
@@ -97,12 +100,12 @@ class AttendanceResource extends Resource
                 Tables\Columns\TextColumn::make('user.name')
                     ->searchable()
                     ->sortable()
-                    ->visible(fn () => auth()->user()->hasRole('admin')),
+                    ->visible(fn() => auth()->user()->hasRole('admin')),
 
                 Tables\Columns\TextColumn::make('office.name')
                     ->searchable()
                     ->sortable()
-                    ->visible(fn () => auth()->user()->hasRole('admin')),
+                    ->visible(fn() => auth()->user()->hasRole('admin')),
 
 
                 Tables\Columns\TextColumn::make('date')
@@ -123,6 +126,10 @@ class AttendanceResource extends Resource
                         'warning' => 'late',
                         'danger' => 'absent',
                     ]),
+                Tables\Columns\TextColumn::make('overtime')
+                    ->label('Lembur (menit)')
+                    ->sortable()
+                    ->default('-'),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('status')
@@ -135,18 +142,24 @@ class AttendanceResource extends Resource
                     ->relationship('office', 'name'),
                 Tables\Filters\SelectFilter::make('user')
                     ->relationship('user', 'name')
-                    ->visible(fn () => auth()->user()->hasRole('admin')),
+                    ->visible(fn() => auth()->user()->hasRole('admin')),
             ])
             ->actions([
                 Tables\Actions\EditAction::make()
-                    ->visible(fn () => auth()->user()->hasRole('admin')),
+                    ->visible(fn() => auth()->user()->hasRole('admin')),
                 Tables\Actions\DeleteAction::make()
-                    ->visible(fn () => auth()->user()->hasRole('admin')),
+                    ->visible(fn() => auth()->user()->hasRole('admin')),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),
-                ])->visible(fn () => auth()->user()->hasRole('admin')),
+                ])->visible(fn() => auth()->user()->hasRole('admin')),
+            ])
+            
+            ->headerActions([
+                ExportAction::make()
+                ->label('Export Data')
+                    ->exporter(AttendanceExporter::class)
             ]);
     }
 

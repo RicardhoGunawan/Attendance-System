@@ -138,4 +138,8 @@ class OfficeResource extends Resource
             'edit' => Pages\EditOffice::route('/{record}/edit'),
         ];
     }
+    public static function getNavigationBadge(): ?string
+    {
+        return static::getModel()::count();
+    }
 }
