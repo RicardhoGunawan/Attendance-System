@@ -12,6 +12,7 @@ return new class extends Migration {
             $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
             $table->foreignId('shift_id')->constrained('shifts')->cascadeOnDelete();
             $table->foreignId('office_id')->constrained('offices')->cascadeOnDelete();
+            $table->boolean('status')->default(false); // Menambahkan kolom status untuk WFA
             $table->timestamps();
         });
     }

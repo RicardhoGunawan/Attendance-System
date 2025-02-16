@@ -11,6 +11,8 @@ class Schedule extends Model
         'user_id',
         'shift_id',
         'office_id',
+        'status', 
+
     ];
 
     public function user(): BelongsTo

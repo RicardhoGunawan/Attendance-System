@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
         // Buat role admin dan employee
         $adminRole = Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
         $employeeRole = Role::firstOrCreate(['name' => 'employee', 'guard_name' => 'web']);
+        $super_adminRole = Role::firstOrCreate(['name' => 'super_admin', 'guard_name' => 'web']);
 
         // Generate permissions untuk resource yang ada
         $resources = [
@@ -65,6 +66,8 @@ class DatabaseSeeder extends Seeder
         // Assign all permissions to admin
         $adminRole->givePermissionTo(Permission::all());
 
+        $super_adminRole->givePermissionTo(Permission::all());
+
         // Assign specific permissions to employee
         $employeeRole->givePermissionTo([
             'view_attendance',
@@ -78,6 +81,14 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // Create admin user if not exists
+        User::firstOrCreate(
+            ['email' => 'super_admin@example.com'],
+            [
+                'name' => 'Super Admin',
+                'password' => bcrypt('password'),
+            ]
+        )->assignRole($super_adminRole);
+
         User::firstOrCreate(
             ['email' => 'admin@example.com'],
             [

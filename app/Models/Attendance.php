@@ -20,6 +20,8 @@ class Attendance extends Model
         'check_out_longitude',
         'status',
         'notes',
+        'is_wfa',
+
     ];
 
     public function user(): BelongsTo

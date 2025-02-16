@@ -83,20 +83,20 @@ class AttendanceController extends Controller
                 ], 400);
             }
 
-            // Validate distance from office
-            if (
-                !$this->isWithinOfficeRadius(
+            // Only validate distance if WFA is not active
+            if (!$schedule->status) {
+                if (!$this->isWithinOfficeRadius(
                     $request->latitude,
                     $request->longitude,
                     $schedule->office->latitude,
                     $schedule->office->longitude,
                     $schedule->office->radius
-                )
-            ) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'You are outside the office radius'
-                ], 400);
+                )) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'You are outside the office radius'
+                    ], 400);
+                }
             }
 
             // Determine check-in status based on shift time
@@ -111,8 +111,8 @@ class AttendanceController extends Controller
                 'check_in_latitude' => $request->latitude,
                 'check_in_longitude' => $request->longitude,
                 'status' => $status,
-                'notes' => $status === 'late' ?
-                    "Late by " . $this->calculateLateMinutes($now, $schedule->shift) . " minutes" : null
+                'is_wfa' => (bool) $schedule->status,  // Pastikan dikonversi ke boolean
+                'notes' => $this->generateCheckInNotes($status, $now, $schedule)
             ]);
 
             $this->logAttendanceActivity($attendance, 'check_in');
@@ -148,34 +148,34 @@ class AttendanceController extends Controller
                 'longitude' => 'required|numeric'
             ]);
 
-            $attendance = Attendance::with('office')
+            $attendance = Attendance::with(['office'])
                 ->where('user_id', $user->id)
                 ->whereDate('date', $now->toDateString())
                 ->whereNotNull('check_in')
                 ->whereNull('check_out')
                 ->firstOrFail();
 
-            // Validate distance from office
-            if (
-                !$this->isWithinOfficeRadius(
+            // Only validate distance if this is not a WFA attendance
+            if (!$attendance->is_wfa) {
+                if (!$this->isWithinOfficeRadius(
                     $request->latitude,
                     $request->longitude,
                     $attendance->office->latitude,
                     $attendance->office->longitude,
                     $attendance->office->radius
-                )
-            ) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'You are outside the office radius'
-                ], 400);
+                )) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'You are outside the office radius'
+                    ], 400);
+                }
             }
 
             // Calculate work duration
             $checkInTime = Carbon::parse($attendance->check_in);
             $workDuration = $now->diffInMinutes($checkInTime);
 
-            $notes = $attendance->notes . "\nWork duration: " . $this->formatWorkDuration($workDuration);
+            $notes = $this->generateCheckOutNotes($attendance, $workDuration);
 
             // Update attendance record
             $attendance->update([
@@ -202,6 +202,34 @@ class AttendanceController extends Controller
                 'message' => 'An error occurred during check-out'
             ], 500);
         }
+    }
+
+    protected function generateCheckInNotes(string $status, Carbon $now, Schedule $schedule): string
+    {
+        $notes = [];
+        
+        if ($status === 'late') {
+            $notes[] = "Late by " . $this->calculateLateMinutes($now, $schedule->shift) . " minutes";
+        }
+        
+        if ($schedule->status) {
+            $notes[] = "Working From Anywhere (WFA)";
+        }
+        
+        return implode("\n", $notes);
+    }
+
+    protected function generateCheckOutNotes(Attendance $attendance, int $workDuration): string
+    {
+        $notes = [];
+        
+        if ($attendance->notes) {
+            $notes[] = $attendance->notes;
+        }
+        
+        $notes[] = "Work duration: " . $this->formatWorkDuration($workDuration);
+        
+        return implode("\n", $notes);
     }
 
     protected function isWithinOfficeRadius($userLat, $userLng, $officeLat, $officeLng, $radius)
