@@ -2,24 +2,22 @@
 
 namespace App\Filament\Widgets;
 
+use Leandrocfe\FilamentApexCharts\Widgets\ApexChartWidget;
 use App\Models\Attendance;
-use Filament\Widgets\ChartWidget;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Auth;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Gate;
 
 
-class AttendanceTrendsChart extends ChartWidget
+class AttendanceTrendsChart extends ApexChartWidget
 {
     public static function canView(): bool
     {
-        return Auth::user()->hasRole('admin'); // Hanya admin yang bisa melihat
+        return Gate::allows('widget_AttendanceTrendsChart');
     }
+    protected static ?string $chartId = 'attendanceTrendsChart';
     protected static ?string $heading = 'Tren Kehadiran Bulanan';
-    protected static string $chartType = 'line';
-    protected static ?string $maxHeight = '300px';
-    protected int | string | array $columnSpan = 2;
-    
-    protected function getData(): array
+
+    protected function getOptions(): array
     {
         // Ambil data 6 bulan terakhir
         $months = 6;
@@ -27,67 +25,68 @@ class AttendanceTrendsChart extends ChartWidget
         $presentData = [];
         $lateData = [];
         $wfaData = [];
-        
-        for ($i = 0; $i < $months; $i++) {
+
+        for ($i = $months - 1; $i >= 0; $i--) {
             $date = Carbon::now()->subMonths($i);
             $labels[] = $date->format('M Y');
-            
-            // Hitung kehadiran berdasarkan status
+
+            // Hitung jumlah kehadiran berdasarkan status
             $present = Attendance::whereYear('date', $date->year)
                         ->whereMonth('date', $date->month)
                         ->where('status', 'present')
                         ->count();
-            
+
             $late = Attendance::whereYear('date', $date->year)
                         ->whereMonth('date', $date->month)
                         ->where('status', 'late')
                         ->count();
-            
+
             $wfa = Attendance::whereYear('date', $date->year)
                         ->whereMonth('date', $date->month)
                         ->where('is_wfa', 1)
                         ->count();
-            
+
             $presentData[] = $present;
             $lateData[] = $late;
             $wfaData[] = $wfa;
         }
-        
-        // Balik array agar urutan dari kiri ke kanan adalah dari yang lama ke yang baru
-        $labels = array_reverse($labels);
-        $presentData = array_reverse($presentData);
-        $lateData = array_reverse($lateData);
-        $wfaData = array_reverse($wfaData);
-        
+
         return [
-            'datasets' => [
+            'chart' => [
+                'type' => 'line',
+                'height' => 350,
+                'toolbar' => ['show' => false],
+            ],
+            'series' => [
                 [
-                    'label' => 'Hadir',
+                    'name' => 'Hadir',
                     'data' => $presentData,
-                    'fill' => false,
-                    'borderColor' => '#36A2EB',
-                    'tension' => 0.1,
+                    'color' => '#36A2EB',
                 ],
                 [
-                    'label' => 'Terlambat',
+                    'name' => 'Terlambat',
                     'data' => $lateData,
-                    'fill' => false,
-                    'borderColor' => '#FFCE56',
-                    'tension' => 0.1,
+                    'color' => '#FFCE56',
                 ],
                 [
-                    'label' => 'WFA',
+                    'name' => 'WFA',
                     'data' => $wfaData,
-                    'fill' => false,
-                    'borderColor' => '#4BC0C0',
-                    'tension' => 0.1,
+                    'color' => '#4BC0C0',
                 ],
             ],
-            'labels' => $labels,
+            'xaxis' => [
+                'categories' => $labels,
+                'labels' => ['rotate' => -45],
+            ],
+            'stroke' => [
+                'curve' => 'smooth',
+            ],
+            'markers' => [
+                'size' => 5,
+            ],
+            'tooltip' => [
+                'enabled' => true,
+            ],
         ];
-    }
-    protected function getType(): string
-    {
-        return static::$chartType;
     }
 }

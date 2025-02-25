@@ -2,32 +2,28 @@
 
 namespace App\Filament\Widgets;
 
+use Leandrocfe\FilamentApexCharts\Widgets\ApexChartWidget;
 use App\Models\Attendance;
 use App\Models\Office;
-use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\Select;
-use Filament\Widgets\ChartWidget;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 
 
-class FilterableAttendanceChart extends ChartWidget
+class FilterableAttendanceChart extends ApexChartWidget
 {
     public static function canView(): bool
     {
-        return Auth::user()->hasRole('admin'); // Hanya admin yang bisa melihat
+        return Gate::allows('widget_FilterableAttendanceChart');
     }
+    protected static ?string $chartId = 'filterableAttendanceChart';
     protected static ?string $heading = 'Analisis Kehadiran';
-    protected static string $chartType = 'bar';
-    protected static ?string $maxHeight = '300px';
-    
-    // Filter state
-    public ?string $filter = null; // NON-STATIC, sesuai dengan ChartWidget Filament
-    public ?string $officeFilter = null; // Tambahkan properti ini
-    public ?string $statusFilter = null; // Tambahkan properti ini
-    
-    // Widget ini dapat difilter
-    protected function getFilters(): ?array
+    protected static string $type = 'bar';
+
+    public ?string $filter = 'this_month';
+    public ?int $officeFilter = null;
+    public ?string $statusFilter = null;
+
+    public function getFilters(): ?array
     {
         return [
             'this_week' => 'Minggu Ini',
@@ -37,62 +33,19 @@ class FilterableAttendanceChart extends ChartWidget
             'this_year' => 'Tahun Ini',
         ];
     }
-    
-    public function getFormSchema(): array
-    {
-        return [
-            Select::make('office')
-                ->label('Kantor')
-                ->options(Office::pluck('name', 'id')->toArray())
-                ->placeholder('Semua Kantor')
-                ->live()
-                ->afterStateUpdated(function ($state) {
-                    $this->officeFilter = $state;
-                    $this->updateChartData();
-                }),
-            
-            Select::make('status')
-                ->label('Status')
-                ->options([
-                    'present' => 'Hadir',
-                    'late' => 'Terlambat',
-                    'absent' => 'Tidak Hadir',
-                ])
-                ->placeholder('Semua Status')
-                ->live()
-                ->afterStateUpdated(function ($state) {
-                    $this->statusFilter = $state;
-                    $this->updateChartData();
-                }),
-            
-            DatePicker::make('date_range')
-                ->label('Rentang Tanggal Kustom')
-                ->range()
-                ->live()
-                ->afterStateUpdated(function ($state) {
-                    if ($state) {
-                        $this->filter = 'custom';
-                        $this->updateChartData();
-                    }
-                }),
-        ];
-    }
-    
-    protected function getData(): array
+
+    protected function getOptions(): array
     {
         $query = Attendance::query();
         
-        // Terapkan filter kantor jika dipilih
         if ($this->officeFilter) {
             $query->where('office_id', $this->officeFilter);
         }
         
-        // Terapkan filter status jika dipilih
         if ($this->statusFilter) {
             $query->where('status', $this->statusFilter);
         }
-        
-        // Terapkan filter waktu
+
         switch ($this->filter) {
             case 'this_week':
                 $startDate = Carbon::now()->startOfWeek();
@@ -114,68 +67,45 @@ class FilterableAttendanceChart extends ChartWidget
                 $startDate = Carbon::now()->startOfYear();
                 $endDate = Carbon::now()->endOfYear();
                 break;
-            case 'custom':
-                // Gunakan rentang tanggal kustom dari form
-                $dateRange = $this->filterFormData['date_range'] ?? null;
-                if ($dateRange && isset($dateRange['from']) && isset($dateRange['to'])) {
-                    $startDate = Carbon::parse($dateRange['from']);
-                    $endDate = Carbon::parse($dateRange['to']);
-                } else {
-                    $startDate = Carbon::now()->startOfMonth();
-                    $endDate = Carbon::now()->endOfMonth();
-                }
-                break;
             default:
                 $startDate = Carbon::now()->startOfMonth();
                 $endDate = Carbon::now()->endOfMonth();
         }
-        
-        // Format data untuk chart
+
         $labels = [];
         $counts = [];
-        
-        // Untuk rentang waktu mingguan atau bulanan yang pendek, tampilkan per hari
+
         if ($endDate->diffInDays($startDate) <= 31) {
             $period = Carbon::parse($startDate)->daysUntil($endDate);
-            
             foreach ($period as $date) {
                 $labels[] = $date->format('d M');
-                $dateString = $date->format('Y-m-d');
-                
-                $dailyQuery = clone $query;
-                $count = $dailyQuery->whereDate('date', $dateString)->count();
-                $counts[] = $count;
+                $counts[] = $query->whereDate('date', $date->format('Y-m-d'))->count();
             }
-        } 
-        // Untuk rentang waktu tahunan, tampilkan per bulan
-        else {
+        } else {
             $period = Carbon::parse($startDate)->monthsUntil($endDate);
-            
             foreach ($period as $date) {
                 $labels[] = $date->format('M Y');
-                
-                $monthlyQuery = clone $query;
-                $count = $monthlyQuery
-                    ->whereYear('date', $date->year)
+                $counts[] = $query->whereYear('date', $date->year)
                     ->whereMonth('date', $date->month)
                     ->count();
-                $counts[] = $count;
             }
         }
-        
+
         return [
-            'datasets' => [
+            'chart' => [
+                'type' => 'bar',
+                'height' => 350,
+            ],
+            'series' => [
                 [
-                    'label' => 'Jumlah Kehadiran',
+                    'name' => 'Jumlah Kehadiran',
                     'data' => $counts,
-                    'backgroundColor' => '#36A2EB',
                 ],
             ],
-            'labels' => $labels,
+            'xaxis' => [
+                'categories' => $labels,
+            ],
+            'colors' => ['#36A2EB'],
         ];
-    }
-    protected function getType(): string
-    {
-        return static::$chartType;
     }
 }

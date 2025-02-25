@@ -21,4 +21,8 @@ class Office extends Model
         'longitude' => 'decimal:8',
         'radius' => 'integer',
     ];
+    public function attendances()
+    {
+        return $this->hasMany(Attendance::class, 'office_id', 'id');
+    }
 }

@@ -2,31 +2,43 @@
 
 namespace App\Filament\Widgets;
 
+use Leandrocfe\FilamentApexCharts\Widgets\ApexChartWidget;
 use App\Models\Attendance;
-use Filament\Widgets\ChartWidget;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 
 
-class CheckInTimesChart extends ChartWidget
+class CheckInTimesChart extends ApexChartWidget
 {
     public static function canView(): bool
     {
-        return Auth::user()->hasRole('admin'); // Hanya admin yang bisa melihat
+        return Gate::allows('widget_CheckInTimesChart');
     }
+    /**
+     * Chart Id
+     *
+     * @var string
+     */
+    protected static ?string $chartId = 'checkInTimesChart';
+
+    /**
+     * Widget Title
+     *
+     * @var string|null
+     */
     protected static ?string $heading = 'Distribusi Waktu Check-in';
-    protected static string $chartType = 'bar';
-    protected static ?string $maxHeight = '300px';
-    protected int | string | array $columnSpan = 2;
-    
-    protected function getData(): array
+
+    /**
+     * Chart options (series, labels, types, size, animations...)
+     * https://apexcharts.com/docs/options
+     *
+     * @return array
+     */
+    protected function getOptions(): array
     {
-        // Ambil data dari bulan ini
         $startDate = Carbon::now()->startOfMonth();
         $endDate = Carbon::now();
         
-        // Buat interval untuk waktu check-in (per jam)
         $timeSlots = [
             '06:00-07:00', '07:00-08:00', '08:00-09:00', '09:00-10:00', 
             '10:00-11:00', '11:00-12:00', '12:00-13:00', '13:00-14:00',
@@ -35,8 +47,7 @@ class CheckInTimesChart extends ChartWidget
         
         $data = [];
         
-        // Query untuk menghitung distribusi waktu check-in
-        foreach ($timeSlots as $index => $slot) {
+        foreach ($timeSlots as $slot) {
             list($start, $end) = explode('-', $slot);
             
             $count = Attendance::whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
@@ -49,18 +60,20 @@ class CheckInTimesChart extends ChartWidget
         }
         
         return [
-            'datasets' => [
-                [
-                    'label' => 'Jumlah Check-in',
-                    'data' => $data,
-                    'backgroundColor' => '#4BC0C0',
-                ],
+            'chart' => [
+                'type' => 'bar',
+                'height' => 350,
             ],
-            'labels' => $timeSlots,
+            'series' => [
+                [
+                    'name' => 'Jumlah Check-in',
+                    'data' => $data,
+                ]
+            ],
+            'xaxis' => [
+                'categories' => $timeSlots,
+            ],
+            'colors' => ['#4BC0C0'],
         ];
-    }
-    protected function getType(): string
-    {
-        return static::$chartType;
     }
 }

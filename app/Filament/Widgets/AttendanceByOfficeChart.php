@@ -2,67 +2,51 @@
 
 namespace App\Filament\Widgets;
 
-use App\Models\Attendance;
+use Leandrocfe\FilamentApexCharts\Widgets\ApexChartWidget;
 use App\Models\Office;
-use Filament\Widgets\ChartWidget;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Auth;
+use App\Models\Attendance;
+use Illuminate\Support\Facades\Gate;
 
 
-class AttendanceByOfficeChart extends ChartWidget
+class AttendanceByOfficeChart extends ApexChartWidget
 {
     public static function canView(): bool
     {
-        return Auth::user()->hasRole('admin'); // Hanya admin yang bisa melihat
+        return Gate::allows('widget_AttendanceByOfficeChart');
     }
-    
-    protected static ?string $heading = 'Kehadiran per Kantor';
-    protected static string $chartType = 'pie';
-    protected static ?string $maxHeight = '300px';
-    protected int | string | array $columnSpan = 2;
-    
-    protected function getData(): array
-    {
-        // Ambil semua kantor
-        $offices = Office::all();
-        $labels = [];
-        $data = [];
-        $colors = ['#36A2EB', '#FF6384', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#C9CBCF'];
-        
-        // Ambil data bulan ini
-        $startDate = Carbon::now()->startOfMonth();
-        $endDate = Carbon::now();
-        
-        foreach ($offices as $index => $office) {
-            $labels[] = $office->name;
-            
-            // Hitung total kehadiran untuk kantor ini
-            $count = Attendance::where('office_id', $office->id)
-                        ->whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
-                        ->where('status', 'present')
-                        ->count();
-                        
-            $data[] = $count;
-        }
-        
-        // Pastikan ada warna yang cukup untuk semua kantor
-        while (count($colors) < count($offices)) {
-            $colors = array_merge($colors, $colors);
-        }
-        
-        return [
-            'datasets' => [
-                [
-                    'data' => $data,
-                    'backgroundColor' => array_slice($colors, 0, count($offices)),
-                ],
-            ],
-            'labels' => $labels,
-        ];
-    }
+    /**
+     * Chart Id
+     *
+     * @var string
+     */
+    protected static ?string $chartId = 'attendanceByOfficeChart';
 
-    protected function getType(): string
+    /**
+     * Widget Title
+     *
+     * @var string|null
+     */
+    protected static ?string $heading = 'AttendanceByOfficeChart';
+
+    /**
+     * Chart options (series, labels, types, size, animations...)
+     * https://apexcharts.com/docs/options
+     *
+     * @return array
+     */
+    protected function getOptions(): array
     {
-        return static::$chartType;
+        $offices = Office::withCount('attendances')->get();
+        $labels = $offices->pluck('name')->toArray();
+        $data = $offices->pluck('attendances_count')->toArray();
+
+        return [
+            'chart' => ['type' => 'pie', 'height' => 350],
+            'series' => $data, // Data array langsung diberikan tanpa nama
+            'labels' => $labels, // Labels untuk masing-masing kantor
+            'legend' => [
+                'position' => 'bottom', // Posisi legenda
+            ],
+        ];
     }
 }
