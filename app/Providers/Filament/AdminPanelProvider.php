@@ -12,6 +12,13 @@ use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\Widgets;
+// use App\Filament\Widgets\AttendanceStatsChart;
+// use App\Filament\Widgets\AttendanceByOfficeChart;
+// use App\Filament\Widgets\AttendanceTrendsChart;
+// use App\Filament\Widgets\LeaveRequestsChart;
+// use App\Filament\Widgets\FilterableAttendanceChart;
+// use App\Filament\Widgets\CheckInTimesChart;
+// use App\Filament\Widgets\WfaVsOfficeChart;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -41,6 +48,13 @@ class AdminPanelProvider extends PanelProvider
             ->widgets([
                 Widgets\AccountWidget::class,
                 Widgets\FilamentInfoWidget::class,
+                // AttendanceStatsChart::class,
+                // AttendanceByOfficeChart::class,
+                // AttendanceTrendsChart::class,
+                // LeaveRequestsChart::class,
+                // FilterableAttendanceChart::class, 
+                // CheckInTimesChart::class,
+                // WfaVsOfficeChart::class,
             ])
             ->middleware([
                 EncryptCookies::class,
